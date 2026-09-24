@@ -9,6 +9,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: write
+  actions: write
+
 jobs:
   package:
     name: Package (${{ matrix.name }})
@@ -55,7 +59,9 @@ jobs:
           sudo apt-get install -y libxkbcommon-dev libegl1-mesa-dev libwayland-dev libglib2.0-dev libfontconfig1-dev
 
       - name: Build release binary
-        run: cargo build --release --locked --target ${{ matrix.target }}
+        run: |
+          set -o pipefail
+          cargo build --release --locked --target ${{ matrix.target }} 2>&1 | tee /tmp/build.log
 
       - name: Package (tar.gz)
         if: runner.os != 'Windows'
@@ -73,6 +79,33 @@ jobs:
           Copy-Item target/${{ matrix.target }}/release/svnguitool.exe dist\svnguitool\
           Set-Content dist\svnguitool\README.txt "需在运行环境安装 SVN 命令行工具 (svn)。`n"
           Compress-Archive -Path dist\svnguitool -DestinationPath ${{ matrix.artifact }}.${{ matrix.ext }}
+
+      - name: Report failure to commit comment (debug)
+        if: failure() && runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { printf '### %s build failed (run id %s)\n\n```\n' "${{ matrix.name }}" "${{ github.run_id }}"; tail -n 400 /tmp/build.log 2>/dev/null || echo '(no /tmp/build.log)'; printf '```\n'; } > /tmp/msg.md
+          python3 - "${{ github.sha }}" /tmp/msg.md <<'PY'
+          import json, os, sys, urllib.request, urllib.error
+          sha, path = sys.argv[1], sys.argv[2]
+          body = open(path, encoding="utf-8", errors="replace").read()
+          req = urllib.request.Request(
+              f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/commits/{sha}/comments",
+              data=json.dumps({"body": body}).encode(),
+              headers={
+                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                  "Accept": "application/vnd.github+json",
+                  "Content-Type": "application/json",
+              },
+              method="POST",
+          )
+          try:
+              r = urllib.request.urlopen(req)
+              print("comment posted:", r.status)
+          except urllib.error.HTTPError as e:
+              print("failed to post:", e.code, e.read().decode()[:300])
+PY
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
