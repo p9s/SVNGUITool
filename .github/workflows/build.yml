@@ -38,6 +38,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       MACOSX_DEPLOYMENT_TARGET: "13.0"
+      CARGO_BUILD_JOBS: "2"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,6 +63,9 @@ jobs:
         run: |
           set -o pipefail
           cargo build --release --locked --target ${{ matrix.target }} 2>&1 | tee /tmp/build.log
+          code=${PIPESTATUS[0]}
+          echo "CARGO_EXIT=$code" >> /tmp/build.log
+          exit "$code"
 
       - name: Package (tar.gz)
         if: runner.os != 'Windows'
@@ -85,7 +89,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          { printf '### %s build failed (run id %s)\n\n```\n' "${{ matrix.name }}" "${{ github.run_id }}"; tail -n 400 /tmp/build.log 2>/dev/null || echo '(no /tmp/build.log)'; printf '```\n'; } > /tmp/msg.md
+          { printf '### %s build failed (run id %s)\n\n```\n' "${{ matrix.name }}" "${{ github.run_id }}"; echo '[exit]'; grep -E 'CARGO_EXIT=' /tmp/build.log | tail -1; echo '[error lines]'; grep -anE '^error|error\[[0-9]|error:|Killed|signal [0-9]|SIGKILL|memory allocation|No space left|cc failure' /tmp/build.log | tail -20; echo '[tail 80]'; tail -80 /tmp/build.log; printf '```\n'; } > /tmp/msg.md
           python3 - "${{ github.sha }}" /tmp/msg.md <<'PY'
           import json, os, sys, urllib.request, urllib.error
           sha, path = sys.argv[1], sys.argv[2]
