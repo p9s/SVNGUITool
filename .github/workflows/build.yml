@@ -25,16 +25,19 @@ jobs:
             name: macOS (Apple Silicon)
             artifact: svnguitool-macos-arm64
             ext: tar.gz
+            linkflags: ""
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             name: Linux (Ubuntu x86_64)
             artifact: svnguitool-linux-x86_64
             ext: tar.gz
+            linkflags: "-C link-arg=-fuse-ld=lld"
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             name: Windows (x86_64 exe)
             artifact: svnguitool-windows-x86_64
             ext: zip
+            linkflags: ""
     runs-on: ${{ matrix.os }}
     env:
       MACOSX_DEPLOYMENT_TARGET: "13.0"
@@ -57,13 +60,17 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon-dev libegl1-mesa-dev libwayland-dev libglib2.0-dev libfontconfig1-dev
+          sudo apt-get install -y libxkbcommon-dev libegl1-mesa-dev libwayland-dev libglib2.0-dev libfontconfig1-dev lld
 
       - name: Build release binary
+        env:
+          RUSTFLAGS: ${{ matrix.linkflags }}
         run: |
           set -o pipefail
+          echo "BUILD_START $(date -u +%H:%M:%S)"
           cargo build --release --locked --target ${{ matrix.target }} 2>&1 | tee /tmp/build.log
           code=${PIPESTATUS[0]}
+          echo "BUILD_END $(date -u +%H:%M:%S)"
           echo "CARGO_EXIT=$code" >> /tmp/build.log
           exit "$code"
 
@@ -89,7 +96,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          { printf '### %s build failed (run id %s)\n\n```\n' "${{ matrix.name }}" "${{ github.run_id }}"; echo '[exit]'; grep -E 'CARGO_EXIT=' /tmp/build.log | tail -1; echo '[error lines]'; grep -anE '^error|error\[[0-9]|error:|Killed|signal [0-9]|SIGKILL|memory allocation|No space left|cc failure' /tmp/build.log | tail -20; echo '[tail 80]'; tail -80 /tmp/build.log; printf '```\n'; } > /tmp/msg.md
+          { printf '### %s build failed (run id %s)\n\n' "${{ matrix.name }}" "${{ github.run_id }}"; echo '```'; echo '[exit]'; grep -E 'CARGO_EXIT=' /tmp/build.log | tail -1; echo '[start/end]'; grep -E 'BUILD_(START|END)' /tmp/build.log; echo '[mem MB]'; free -m | head -2; echo '[df]'; df -h / /tmp 2>/dev/null; echo '[oom events]'; cat /sys/fs/cgroup/memory.events 2>/dev/null | grep -i oom; grep -i oom /sys/fs/cgroup/*/memory.events 2>/dev/null | head -5; echo '[dmesg]'; dmesg 2>/dev/null | tail -8 || echo '(none)'; echo '[error lines]'; grep -anE '^error|error\[[0-9]|error:|Killed|signal [0-9]|SIGKILL|memory allocation|No space left|cc failure|too many' /tmp/build.log | tail -20; echo '[tail 40]'; tail -40 /tmp/build.log; echo '```'; } > /tmp/msg.md
           python3 - "${{ github.sha }}" /tmp/msg.md <<'PY'
           import json, os, sys, urllib.request, urllib.error
           sha, path = sys.argv[1], sys.argv[2]
