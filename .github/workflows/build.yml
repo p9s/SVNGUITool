@@ -105,7 +105,7 @@ jobs:
               print("comment posted:", r.status)
           except urllib.error.HTTPError as e:
               print("failed to post:", e.code, e.read().decode()[:300])
-PY
+          PY
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
