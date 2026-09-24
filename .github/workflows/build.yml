@@ -92,11 +92,21 @@ jobs:
           Compress-Archive -Path dist\svnguitool -DestinationPath ${{ matrix.artifact }}.${{ matrix.ext }}
 
       - name: Report failure to commit comment (debug)
-        if: failure() && runner.os == 'Linux'
+        if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          { printf '### %s build failed (run id %s)\n\n' "${{ matrix.name }}" "${{ github.run_id }}"; echo '```'; echo '[exit]'; grep -E 'CARGO_EXIT=' /tmp/build.log | tail -1; echo '[start/end]'; grep -E 'BUILD_(START|END)' /tmp/build.log; echo '[mem MB]'; free -m | head -2; echo '[df]'; df -h / /tmp 2>/dev/null; echo '[oom events]'; cat /sys/fs/cgroup/memory.events 2>/dev/null | grep -i oom; grep -i oom /sys/fs/cgroup/*/memory.events 2>/dev/null | head -5; echo '[dmesg]'; dmesg 2>/dev/null | tail -8 || echo '(none)'; echo '[error lines]'; grep -anE '^error|error\[[0-9]|error:|Killed|signal [0-9]|SIGKILL|memory allocation|No space left|cc failure|too many' /tmp/build.log | tail -20; echo '[tail 40]'; tail -40 /tmp/build.log; echo '```'; } > /tmp/msg.md
+          set +e
+          echo '### ${{ matrix.name }} build failed (run id ${{ github.run_id }})' > /tmp/msg.md
+          echo '```' >> /tmp/msg.md
+          echo '[exit]' >> /tmp/msg.md; grep -E 'CARGO_EXIT=' /tmp/build.log 2>/dev/null | tail -1 >> /tmp/msg.md
+          echo '[start/end]' >> /tmp/msg.md; grep -E 'BUILD_(START|END)' /tmp/build.log 2>/dev/null | tail -4 >> /tmp/msg.md
+          echo '[mem MB]' >> /tmp/msg.md; free -m 2>/dev/null | head -2 >> /tmp/msg.md
+          echo '[df]' >> /tmp/msg.md; df -h / /tmp 2>/dev/null >> /tmp/msg.md
+          echo '[oom events]' >> /tmp/msg.md; cat /sys/fs/cgroup/memory.events 2>/dev/null | grep -i oom >> /tmp/msg.md; cat /sys/fs/cgroup/*/memory.events 2>/dev/null | grep -i oom | head -3 >> /tmp/msg.md
+          echo '[error lines]' >> /tmp/msg.md; grep -anE 'error|Error|error\[[0-9]|Killed|SIGKILL|signal [0-9]|memory allocation|No space left|cc failure|ld:|clang:|linker' /tmp/build.log 2>/dev/null | tail -25 >> /tmp/msg.md
+          echo '[tail 40]' >> /tmp/msg.md; tail -40 /tmp/build.log 2>/dev/null >> /tmp/msg.md
+          echo '```' >> /tmp/msg.md
           python3 - "${{ github.sha }}" /tmp/msg.md <<'PY'
           import json, os, sys, urllib.request, urllib.error
           sha, path = sys.argv[1], sys.argv[2]
