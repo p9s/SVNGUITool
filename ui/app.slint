@@ -1,0 +1,423 @@
+import { Button, LineEdit, ScrollView, ListView } from "std-widgets.slint";
+
+// 列表栏下方的过滤 + 刷新面板（上列表、下过滤）
+component FilterPanel {
+    in-out property <string> keyword: "";
+    in-out property <string> author: "";
+    in-out property <string> rev-min: "";
+    in-out property <string> rev-max: "";
+    in-out property <string> date-min: "";
+    in-out property <string> date-max: "";
+    in-out property <string> limit: "500";
+    callback apply-f();
+    callback ref-f();
+
+    VerticalLayout {
+        spacing: 6px;
+
+        HorizontalLayout {
+            spacing: 6px;
+
+            Text { text: "关键字"; vertical-alignment: center; }
+            LineEdit {
+                text <=> keyword;
+                placeholder-text: "提交信息/路径";
+                horizontal-stretch: 1;
+            }
+            Text { text: "作者"; vertical-alignment: center; }
+            LineEdit {
+                text <=> author;
+                width: 84px;
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 6px;
+
+            Text { text: "Rev"; vertical-alignment: center; }
+            LineEdit {
+                text <=> rev-min;
+                width: 52px;
+                placeholder-text: "起";
+            }
+            Text { text: "-"; vertical-alignment: center; }
+            LineEdit {
+                text <=> rev-max;
+                width: 52px;
+                placeholder-text: "止";
+            }
+            Text { text: "日期"; vertical-alignment: center; }
+            LineEdit {
+                text <=> date-min;
+                width: 70px;
+                placeholder-text: "YYYY-MM-DD";
+            }
+            Text { text: "-"; vertical-alignment: center; }
+            LineEdit {
+                text <=> date-max;
+                width: 70px;
+                placeholder-text: "YYYY-MM-DD";
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 6px;
+
+            Text { text: "条数"; vertical-alignment: center; }
+            LineEdit {
+                text <=> limit;
+                width: 52px;
+            }
+            Button {
+                text: "应用过滤";
+                horizontal-stretch: 1;
+                clicked => { apply-f(); }
+            }
+            Button {
+                text: "刷新";
+                horizontal-stretch: 1;
+                clicked => { ref-f(); }
+            }
+        }
+    }
+}
+
+struct CommitItem {
+    rev: string,
+    author: string,
+    date: string,
+    msg: string,
+    loading: bool,
+}
+
+struct ChangeItem {
+    action: string,
+    path: string,
+}
+
+struct DiffLine {
+    color: brush,
+    bold: bool,
+    italic: bool,
+    text: string,
+}
+
+export component MainWindow inherits Window {
+    title: "SVNTool";
+    preferred-width: 1280px;
+    preferred-height: 840px;
+    background: #f6f8fa;
+
+    in property <string> status: "";
+    in property <string> current-target: "";
+    in property <[CommitItem]> commit-model: [];
+    in property <[ChangeItem]> change-model: [];
+    in property <[DiffLine]> diff-model: [];
+    in-out property <string> selected-rev: "";
+    in property <int> selected-change: -1;
+    in property <bool> has-more: false;
+    in property <bool> load-more-busy: false;
+
+    in-out property <string> target-input: "";
+    in-out property <string> filter-keyword: "";
+    in-out property <string> filter-author: "";
+    in-out property <string> filter-rev-min: "";
+    in-out property <string> filter-rev-max: "";
+    in-out property <string> filter-date-min: "";
+    in-out property <string> filter-date-max: "";
+    in-out property <string> filter-limit: "500";
+
+    callback connect(string);
+    callback open-local();
+    callback refresh();
+    callback apply-filter();
+    callback tab1-commit-selected(string);
+    callback tab1-file-selected(int);
+    callback load-more-commits();
+
+    VerticalLayout {
+        spacing: 0px;
+
+        // ---------------- 顶部工具栏 ----------------
+        Rectangle {
+            height: 48px;
+            vertical-stretch: 0;
+            background: #ffffff;
+
+            VerticalLayout {
+                padding-right: 10px;
+                padding-top: 6px;
+                padding-bottom: 6px;
+                spacing: 6px;
+
+                HorizontalLayout {
+                    spacing: 8px;
+
+                    Text { text: "仓库"; vertical-alignment: center; }
+
+                    LineEdit {
+                        text <=> target-input;
+                        placeholder-text: "SVN 仓库 URL 或本地工作副本路径";
+                        horizontal-stretch: 1;
+                    }
+
+                    Button {
+                        text: "连接";
+                        clicked => { connect(target-input); }
+                    }
+
+                    Button {
+                        text: "打开本地项目…";
+                        clicked => { open-local(); }
+                    }
+                }
+            }
+        }
+
+        // 已连接目标信息栏
+        Rectangle {
+            visible: current-target != "";
+            height: 32px;
+            vertical-stretch: 0;
+            background: #eef1f4;
+
+            HorizontalLayout {
+                padding-left: 10px;
+                padding-right: 10px;
+                spacing: 8px;
+
+                Text {
+                    text: "当前目标: " + current-target;
+                    color: #24292f;
+                    font-size: 13px;
+                    vertical-alignment: center;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                }
+            }
+        }
+
+        // 工具栏与内容区之间的分隔线
+        Rectangle {
+            height: 1px;
+            vertical-stretch: 0;
+            background: #d0d7de;
+        }
+
+        // ---------------- 主内容区 ----------------
+        Rectangle {
+            vertical-stretch: 1;
+
+            // ---- Tab1: 按提交查看 ----
+            HorizontalLayout {
+                spacing: 0px;
+
+                Rectangle {
+                    width: 400px;
+                    background: #ffffff;
+
+                    VerticalLayout {
+                        padding: 6px;
+                        spacing: 4px;
+
+                        Text {
+                            text: "提交记录（点击查看改动文件与内容）";
+                            font-weight: 600;
+                            color: #24292f;
+                        }
+                        ListView {
+                            vertical-stretch: 1;
+
+                            scrolled => {
+                                if self.viewport-y + self.visible-height >= self.viewport-height - 1px {
+                                    if root.has-more && !root.load-more-busy {
+                                        root.load-more-commits();
+                                    }
+                                }
+                            }
+
+                            for item[idx] in commit-model: Rectangle {
+                                height: item.loading ? 28px : 48px;
+                                background: !item.loading && item.rev == selected-rev ? #ddf4ff : transparent;
+
+                                init => {
+                                    if item.loading && idx == commit-model.length - 1 {
+                                        if root.has-more && !root.load-more-busy {
+                                            root.load-more-commits();
+                                        }
+                                    }
+                                }
+
+                                if item.loading: VerticalLayout {
+                                    Text {
+                                        text: "加载更多…";
+                                        color: #57606a;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                        font-size: 12px;
+                                    }
+                                }
+                                if !item.loading: TouchArea {
+                                    clicked => { tab1-commit-selected(item.rev); }
+
+                                    VerticalLayout {
+                                        padding-right: 6px;
+                                        padding-top: 4px;
+                                        padding-bottom: 4px;
+                                        spacing: 2px;
+
+                                        HorizontalLayout {
+                                            spacing: 8px;
+
+                                            Text {
+                                                text: item.rev;
+                                                font-weight: 700;
+                                                color: #0969da;
+                                            }
+                                            Text {
+                                                text: item.date;
+                                                color: #57606a;
+                                            }
+                                            Text {
+                                                text: item.author;
+                                                color: #1f2328;
+                                            }
+                                        }
+
+                                        Text {
+                                            text: item.msg;
+                                            color: #57606a;
+                                            overflow: elide;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        FilterPanel {
+                            keyword <=> filter-keyword;
+                            author <=> filter-author;
+                            rev-min <=> filter-rev-min;
+                            rev-max <=> filter-rev-max;
+                            date-min <=> filter-date-min;
+                            date-max <=> filter-date-max;
+                            limit <=> filter-limit;
+                            apply-f => { apply-filter(); }
+                            ref-f => { refresh(); }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    width: 1px;
+                    background: #d0d7de;
+                }
+
+                Rectangle {
+                    width: 340px;
+                    background: #ffffff;
+
+                    VerticalLayout {
+                        padding: 6px;
+                        spacing: 4px;
+
+                        Text {
+                            text: "本次改动文件";
+                            font-weight: 600;
+                            color: #24292f;
+                        }
+                        ScrollView {
+                            vertical-stretch: 1;
+
+                            ListView {
+                                for item[idx] in change-model: Rectangle {
+                                    height: 26px;
+                                    background: idx == selected-change ? #ddf4ff : transparent;
+
+                                    TouchArea {
+                                        clicked => { tab1-file-selected(idx); }
+                                    }
+
+                                    HorizontalLayout {
+                                        padding-right: 6px;
+                                        spacing: 8px;
+
+                                        Text {
+                                            text: item.action;
+                                            width: 20px;
+                                            font-weight: 700;
+                                            vertical-alignment: center;
+                                            color: item.action == "A" ? #1a7f37 : item.action == "M" ? #b35900 : item.action == "D" ? #cf222e : item.action == "R" ? #8250df : #57606a;
+                                        }
+                                        Text {
+                                            text: item.path;
+                                            horizontal-stretch: 1;
+                                            horizontal-alignment: left;
+                                            vertical-alignment: center;
+                                            color: #24292f;
+                                            overflow: elide;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    horizontal-stretch: 1;
+                    background: #ffffff;
+
+                    VerticalLayout {
+                        padding: 6px;
+                        spacing: 4px;
+
+                        Text {
+                            text: "修改内容";
+                            font-weight: 600;
+                            color: #24292f;
+                        }
+                        ScrollView {
+                            vertical-stretch: 1;
+
+                            ListView {
+                                for line in diff-model: Rectangle {
+                                    height: 20px;
+                                    background: transparent;
+
+                                    HorizontalLayout {
+                                        Text {
+                                            text: line.text;
+                                            color: line.color;
+                                            font-family: "Menlo, Monaco, monospace";
+                                            font-weight: line.bold ? 700 : 400;
+                                            font-italic: line.italic;
+                                            wrap: word-wrap;
+                                            horizontal-stretch: 1;
+                                            horizontal-alignment: left;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---------------- 状态栏 ----------------
+        Rectangle {
+            height: 24px;
+            vertical-stretch: 0;
+            background: #24292f;
+
+            Text {
+                text: status;
+                color: #ffffff;
+                vertical-alignment: center;
+                font-size: 12px;
+            }
+        }
+    }
+}
