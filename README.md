@@ -1,4 +1,4 @@
-# SVNTool
+# SVNGUITool
 
 SVN 提交查看工具。基于 **Rust + Slint** 构建的跨平台桌面 GUI，用于浏览 SVN 仓库/工作副本的提交历史、查看每次提交改动的文件与内容差异。
 
@@ -47,7 +47,7 @@ cargo run --release
 
 ## 配置文件
 
-首次连接成功后，程序把目标记忆到当前目录下的 `.svntool.json`（此文件已在 `.gitignore` 中）：
+首次连接成功后，程序把目标记忆到当前目录下的 `.svnguitool.json`（此文件已在 `.gitignore` 中）：
 
 ```json
 { "last_target": "https://example.com/svn/repo" }
@@ -67,9 +67,9 @@ cargo test
 
 | 平台 | 产物 |
 |---|---|
-| macOS (Apple Silicon) | `svntool-macos-arm64.tar.gz` |
-| Linux (Ubuntu x86_64) | `svntool-linux-x86_64.tar.gz` |
-| Windows (x86_64) | `svntool-windows-x86_64.zip` |
+| macOS (Apple Silicon) | `svnguitool-macos-arm64.tar.gz` |
+| Linux (Ubuntu x86_64) | `svnguitool-linux-x86_64.tar.gz` |
+| Windows (x86_64) | `svnguitool-windows-x86_64.zip` |
 
 分发前请先将本仓库推送到 GitHub（`git push -u origin master`）。运行目标机器仍需安装 `svn` 命令行。
 
@@ -81,7 +81,7 @@ src/main.rs        入口、连接/提交列表/加载更多/选中与 diff 展�
 src/svn.rs         svn 命令执行与 XML 解析
 src/diff.rs        diff 文本着色/分类
 src/state.rs       过滤条件解析与匹配
-src/config.rs      配置持久化 (.svntool.json)
+src/config.rs      配置持久化 (.svnguitool.json)
 build.rs           slint-build 编译 ui/app.slint
 .github/workflows  三平台打包的 GitHub Actions
 ```

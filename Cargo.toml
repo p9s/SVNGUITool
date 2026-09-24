@@ -1,8 +1,8 @@
 [package]
-name = "svntool"
+name = "svnguitool"
 version = "0.1.0"
 edition = "2021"
-description = "SVNTool - SVN 提交查看工具 (Rust + Slint)"
+description = "SVNGUITool - SVN 提交查看工具 (Rust + Slint)"
 license = "GPL-3.0-or-later"
 
 [dependencies]

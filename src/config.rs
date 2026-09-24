@@ -9,7 +9,7 @@ pub struct AppConfig {
 pub fn config_path() -> PathBuf {
     std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
-        .join(".svntool.json")
+        .join(".svnguitool.json")
 }
 
 pub fn load() -> AppConfig {

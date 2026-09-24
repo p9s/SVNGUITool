@@ -410,7 +410,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // ---- 状态栏初始提示 ----
-    ui.set_status("SVNTool: 左侧输入 SVN 仓库 URL 或本地工作副本路径，点击「连接」".into());
+    ui.set_status("SVNGUITool: 左侧输入 SVN 仓库 URL 或本地工作副本路径，点击「连接」".into());
 
     // ---- 绑定回调 ----
     {

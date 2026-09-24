@@ -19,17 +19,17 @@ jobs:
           - os: macos-14
             target: aarch64-apple-darwin
             name: macOS (Apple Silicon)
-            artifact: svntool-macos-arm64
+            artifact: svnguitool-macos-arm64
             ext: tar.gz
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             name: Linux (Ubuntu x86_64)
-            artifact: svntool-linux-x86_64
+            artifact: svnguitool-linux-x86_64
             ext: tar.gz
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             name: Windows (x86_64 exe)
-            artifact: svntool-windows-x86_64
+            artifact: svnguitool-windows-x86_64
             ext: zip
     runs-on: ${{ matrix.os }}
     env:
@@ -60,19 +60,19 @@ jobs:
       - name: Package (tar.gz)
         if: runner.os != 'Windows'
         run: |
-          mkdir -p dist/svntool
-          cp target/${{ matrix.target }}/release/svntool dist/svntool/
-          printf "需在运行环境安装 SVN 命令行工具 (svn)。\n" > dist/svntool/README.txt
-          tar -C dist -czvf ${{ matrix.artifact }}.${{ matrix.ext }} svntool
+          mkdir -p dist/svnguitool
+          cp target/${{ matrix.target }}/release/svnguitool dist/svnguitool/
+          printf "需在运行环境安装 SVN 命令行工具 (svn)。\n" > dist/svnguitool/README.txt
+          tar -C dist -czvf ${{ matrix.artifact }}.${{ matrix.ext }} svnguitool
 
       - name: Package (zip)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist\svntool | Out-Null
-          Copy-Item target/${{ matrix.target }}/release/svntool.exe dist\svntool\
-          Set-Content dist\svntool\README.txt "需在运行环境安装 SVN 命令行工具 (svn)。`n"
-          Compress-Archive -Path dist\svntool -DestinationPath ${{ matrix.artifact }}.${{ matrix.ext }}
+          New-Item -ItemType Directory -Force -Path dist\svnguitool | Out-Null
+          Copy-Item target/${{ matrix.target }}/release/svnguitool.exe dist\svnguitool\
+          Set-Content dist\svnguitool\README.txt "需在运行环境安装 SVN 命令行工具 (svn)。`n"
+          Compress-Archive -Path dist\svnguitool -DestinationPath ${{ matrix.artifact }}.${{ matrix.ext }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

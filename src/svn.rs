@@ -418,7 +418,7 @@ mod integration_tests {
                 panic!("未找到 svnadmin，无法运行集成测试");
             }
             let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-            let base = std::env::temp_dir().join(format!("svntool_test_{}_{}_{}", name, std::process::id(), n));
+            let base = std::env::temp_dir().join(format!("svnguitool_test_{}_{}_{}", name, std::process::id(), n));
             let _ = fs::remove_dir_all(&base);
             fs::create_dir_all(&base).unwrap();
 
