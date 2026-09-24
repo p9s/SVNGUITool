@@ -15,7 +15,7 @@ log = "0.4"
 icu_provider = { version = "2.3.1", features = ["logging"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-rfd = { version = "0.15", default-features = false, features = ["xdg-portal"] }
+rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }
 
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 rfd = { version = "0.15", default-features = false }
