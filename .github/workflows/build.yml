@@ -104,10 +104,11 @@ jobs:
           echo '[mem MB]' >> /tmp/msg.md; free -m 2>/dev/null | head -2 >> /tmp/msg.md
           echo '[df]' >> /tmp/msg.md; df -h / /tmp 2>/dev/null >> /tmp/msg.md
           echo '[oom events]' >> /tmp/msg.md; cat /sys/fs/cgroup/memory.events 2>/dev/null | grep -i oom >> /tmp/msg.md; cat /sys/fs/cgroup/*/memory.events 2>/dev/null | grep -i oom | head -3 >> /tmp/msg.md
-          echo '[error lines]' >> /tmp/msg.md; grep -anE 'error|Error|error\[[0-9]|Killed|SIGKILL|signal [0-9]|memory allocation|No space left|cc failure|ld:|clang:|linker' /tmp/build.log 2>/dev/null | tail -25 >> /tmp/msg.md
+          echo '[error lines]' >> /tmp/msg.md; grep -anE 'error|Error|error\[E[0-9]|LNK[0-9]{4}|Killed|SIGKILL|signal [0-9]|memory allocation|No space left|cc failure|ld:|clang:|linker|exit code: [0-9]' /tmp/build.log 2>/dev/null | tail -30 >> /tmp/msg.md
           echo '[tail 40]' >> /tmp/msg.md; tail -40 /tmp/build.log 2>/dev/null >> /tmp/msg.md
           echo '```' >> /tmp/msg.md
-          python3 - "${{ github.sha }}" /tmp/msg.md <<'PY'
+          PY=$(command -v python3 || command -v python || command -v py)
+          "$PY" - "${{ github.sha }}" /tmp/msg.md <<'PY'
           import json, os, sys, urllib.request, urllib.error
           sha, path = sys.argv[1], sys.argv[2]
           body = open(path, encoding="utf-8", errors="replace").read()
