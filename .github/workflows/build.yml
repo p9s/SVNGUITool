@@ -62,6 +62,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libxkbcommon-dev libegl1-mesa-dev libwayland-dev libglib2.0-dev libfontconfig1-dev lld
 
+      - name: Install macOS libsvn dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install subversion apr apr-util utf8proc gettext lz4 zlib
+
+      - name: Prepare libsvn pkgconfig for macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          source scripts/macos-libsvn-env.sh
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> "$GITHUB_ENV"
+          echo "LIBRARY_PATH=$LIBRARY_PATH" >> "$GITHUB_ENV"
+
       - name: Build release binary
         shell: bash
         env:
@@ -80,7 +93,11 @@ jobs:
         run: |
           mkdir -p dist/svnguitool
           cp target/${{ matrix.target }}/release/svnguitool dist/svnguitool/
-          printf "需在运行环境安装 SVN 命令行工具 (svn)。\n" > dist/svnguitool/README.txt
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            printf "macOS 版通过 libsvn dylib 访问 SVN，运行环境需安装 Homebrew subversion（含 apr/apr-util 等依赖）。\n" > dist/svnguitool/README.txt
+          else
+            printf "需在运行环境安装 SVN 命令行工具 (svn)。\n" > dist/svnguitool/README.txt
+          fi
           tar -C dist -czvf ${{ matrix.artifact }}.${{ matrix.ext }} svnguitool
 
       - name: Package (zip)

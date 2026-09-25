@@ -2,7 +2,7 @@
 
 SVN 提交查看工具。基于 **Rust + Slint** 构建的跨平台桌面 GUI，用于浏览 SVN 仓库/工作副本的提交历史、查看每次提交改动的文件与内容差异。
 
-> 依赖系统自带的 `svn` 命令行工具（运行时通过 `svn` 执行 `log`/`diff`/`info` 等命令）。
+> 运行时依赖因平台而异：**macOS 使用 libsvn 动态库**访问 SVN；**Windows/Linux 通过 `svn` 命令行**执行 `log`/`diff`/`info` 等命令。
 
 ## 功能
 
@@ -16,18 +16,24 @@ SVN 提交查看工具。基于 **Rust + Slint** 构建的跨平台桌面 GUI，
 
 ## 环境要求
 
-- **SVN 命令行客户端**：`svn`（含 `svn --version` 可用，需支持 `--xml` 输出）。macOS/Linux 安装 `subversion`，Windows 安装 TortoiseSVN 或 SlikSVN 并加入 PATH。
+- **macOS**：Homebrew 安装 `subversion`（含 `apr`、`apr-util`、`utf8proc`、`gettext`、`lz4`、`zlib` 等依赖）。程序通过 `libsvn` 动态库访问 SVN，**不需要** `svn` 命令行。构建前需先执行脚本生成 pkg-config 并设置环境（见下节）。
+- **Linux / Windows**：`svn` 命令行客户端（含 `svn --version` 可用，需支持 `--xml` 输出）。Linux 安装 `subversion` 包，Windows 安装 TortoiseSVN 或 SlikSVN 并加入 PATH。
 - **Rust 工具链**：stable（2021 edition），`cargo` 可用。Slint 组件的编译期生成依赖正常网络拉取 crates。
 
 ## 构建与运行
 
 ```bash
+# macOS：先准备 libsvn 的 pkg-config 与链接环境（Homebrew 的 subversion 不带 .pc）
+source scripts/macos-libsvn-env.sh
+
 # 开发模式
 cargo run
 
 # 发布模式
 cargo run --release
 ```
+
+macOS 构建依赖 `subversion` crate（`subversion-sys` 通过 pkg-config 探测 `libsvn_*`）。脚本会生成 `target/svn-pc/svn_*-1.pc`，并导出 `PKG_CONFIG_PATH` / `LIBRARY_PATH`；如提示缺少 Homebrew 依赖，先执行 `brew install subversion apr apr-util utf8proc gettext lz4 zlib`。Linux/Windows 无需此脚本，直接 `cargo build` 即可。
 
 启动后左上角输入仓库 URL 或本地工作副本路径，点击「连接」；也可点击「打开本地项目…」选择文件夹。
 
@@ -59,7 +65,7 @@ cargo run --release
 cargo test
 ```
 
-单元测试覆盖配置读写、diff 着色、过滤解析、SVN XML 解析等；集成测试会在临时目录创建真实 SVN 测试仓库（因此运行测试需要本机可执行 `svn`）。
+单元测试覆盖配置读写、diff 着色、过滤解析、SVN XML 解析（Linux/Windows 下的命令行后端）等；集成测试会在临时目录创建真实 SVN 测试仓库。macOS 上集成测试走 libsvn 后端（`file://` 仓库），因此运行测试也需要 `svn`/`svnadmin`（创建仓库用），并先执行 `source scripts/macos-libsvn-env.sh`。
 
 ## 打包（CI）
 
@@ -71,14 +77,16 @@ cargo test
 | Linux (Ubuntu x86_64) | `svnguitool-linux-x86_64.tar.gz` |
 | Windows (x86_64) | `svnguitool-windows-x86_64.zip` |
 
-分发前请先将本仓库推送到 GitHub（`git push -u origin master`）。运行目标机器仍需安装 `svn` 命令行。
+分发前请先将本仓库推送到 GitHub（`git push -u origin master`）。运行目标机器的依赖：**macOS 需 Homebrew `subversion` 动态库**（编译脚本同款依赖，`brew install subversion`）；**Linux/Windows 需 `svn` 命令行**。
 
 ## 项目结构
 
 ```
 ui/app.slint       Slint 界面定义（组件、布局、回调）
 src/main.rs        入口、连接/提交列表/加载更多/选中与 diff 展示
-src/svn.rs         svn 命令执行与 XML 解析
+src/svn.rs          后端分派 + svn 命令行后端（Linux/Windows 用，cfg 门控）
+src/svn/libsvn.rs    libsvn 后端（macOS 用）
+scripts/macos-libsvn-env.sh  macOS 构建环境准备（生成 svn pkg-config）
 src/diff.rs        diff 文本着色/分类
 src/state.rs       过滤条件解析与匹配
 src/config.rs      配置持久化 (.svnguitool.json)

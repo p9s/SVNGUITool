@@ -1,12 +1,8 @@
 use std::fmt;
-use std::process::Command;
-
-use quick_xml::events::Event;
-use quick_xml::Reader;
-
-const SVN_BIN: &str = "svn";
 
 #[derive(Debug)]
+// macOS 走 libsvn 后端，cli 模块（Io/NonUtf8 的构造处）不编译。
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 pub enum SvnError {
     Io(std::io::Error),
     NonUtf8,
@@ -77,84 +73,96 @@ impl RepoInfo {
     }
 }
 
-fn run_svn(args: &[&str]) -> Result<String> {
-    let out = Command::new(SVN_BIN)
-        .arg("--non-interactive")
-        .args(args)
-        .output()
-        .map_err(SvnError::Io)?;
-    if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
-        let msg = err.trim().to_string();
-        return Err(SvnError::Command(if msg.is_empty() {
-            String::from_utf8_lossy(&out.stdout).trim().to_string()
-        } else {
-            msg
-        }));
-    }
-    String::from_utf8(out.stdout).map_err(|_| SvnError::NonUtf8)
-}
-
-/// 校验目标（URL 或本地工作副本路径）并解析出仓库根 URL 等信息。
-pub fn connect(target: &str) -> Result<RepoInfo> {
-    let xml = run_svn(&["info", "--xml", target])?;
-    parse_info(&xml)
-}
-
-/// `svn log -v`：提交列表及其改动文件（供 Tab1）。
-pub fn log_verbose(target: &str, limit: usize) -> Result<Vec<LogEntry>> {
-    let limit = if limit == 0 { 500 } else { limit };
-    let xml = run_svn(&["log", "-v", "--xml", "-l", &limit.to_string(), target])?;
-    Ok(parse_log(&xml))
-}
-
-/// 分页：取比 `upto`（最新已加载的“最深”march revision）更旧的至多 `limit` 条。
-/// 使用 `-r {upto}:1` 范围，保证不含 `upto` 本身且不重复。`upto <= 1` 时直接返回空。
-pub fn log_verbose_upto(target: &str, limit: usize, upto: i64) -> Result<Vec<LogEntry>> {
-    if upto <= 1 {
-        return Ok(Vec::new());
-    }
-    let limit = if limit == 0 { 500 } else { limit };
-    let range = format!("{}:1", upto - 1);
-    let xml = run_svn(&["log", "-v", "--xml", "-r", &range, "-l", &limit.to_string(), target])?;
-    Ok(parse_log(&xml))
-}
-
-/// 取 target(仓库内完整 URL) 在 rev 提交中的差异文本。
-/// 使用 peg 限定 @rev，保证已删除的文件也能取到 diff。
-pub fn diff(target_url: &str, rev: i64) -> Result<String> {
-    let peg = format!("{target_url}@{rev}");
-    run_svn(&["diff", "-c", &rev.to_string(), &peg])
-}
-
-// ---------------- XML 解析 ----------------
-
-fn event_name(name: quick_xml::name::QName) -> String {
-    String::from_utf8_lossy(name.as_ref()).into_owned()
-}
-
-fn attr(buf: &quick_xml::events::BytesStart<'_>, key: &str) -> String {
-    buf.attributes()
-        .filter_map(|a| a.ok())
-        .find(|a| a.key.as_ref() == key.as_bytes())
-        .map(|a| String::from_utf8_lossy(a.value.as_ref()).into_owned())
-        .unwrap_or_default()
-}
-
-fn text_of(bytes: &quick_xml::events::BytesText<'_>) -> String {
-    bytes
-        .unescape()
-        .map(|c| c.into_owned())
-        .unwrap_or_else(|_| String::from_utf8_lossy(bytes.as_ref()).into_owned())
-}
-
-fn format_local_date(iso: &str) -> String {
+/// 把 svn 的 ISO8601 时间转成本地时间显示串（解析失败则原样返回）。
+pub(crate) fn format_local_date(iso: &str) -> String {
     use chrono::{DateTime, Local};
     match DateTime::parse_from_rfc3339(iso) {
         Ok(dt) => dt.with_timezone(&Local).format("%Y-%m-%d %H:%M").to_string(),
         Err(_) => iso.to_string(),
     }
 }
+
+/// macOS 使用 libsvn 后端；其它平台使用 svn 命令行后端。
+#[cfg(target_os = "macos")]
+mod libsvn;
+
+#[cfg(not(target_os = "macos"))]
+mod cli {
+    use super::*;
+    use std::process::Command;
+
+    const SVN_BIN: &str = "svn";
+
+    fn run_svn(args: &[&str]) -> Result<String> {
+        let out = Command::new(SVN_BIN)
+            .arg("--non-interactive")
+            .args(args)
+            .output()
+            .map_err(SvnError::Io)?;
+        if !out.status.success() {
+            let err = String::from_utf8_lossy(&out.stderr);
+            let msg = err.trim().to_string();
+            return Err(SvnError::Command(if msg.is_empty() {
+                String::from_utf8_lossy(&out.stdout).trim().to_string()
+            } else {
+                msg
+            }));
+        }
+        String::from_utf8(out.stdout).map_err(|_| SvnError::NonUtf8)
+    }
+
+    /// 校验目标（URL 或本地工作副本路径）并解析出仓库根 URL 等信息。
+    pub fn connect(target: &str) -> Result<RepoInfo> {
+        let xml = run_svn(&["info", "--xml", target])?;
+        parse_info(&xml)
+    }
+
+    /// `svn log -v`：提交列表及其改动文件（供 Tab1）。
+    pub fn log_verbose(target: &str, limit: usize) -> Result<Vec<LogEntry>> {
+        let limit = if limit == 0 { 500 } else { limit };
+        let xml = run_svn(&["log", "-v", "--xml", "-l", &limit.to_string(), target])?;
+        Ok(parse_log(&xml))
+    }
+
+    /// 分页：取比 `upto`（最新已加载的“最深”march revision）更旧的至多 `limit` 条。
+    /// 使用 `-r {upto}:1` 范围，保证不含 `upto` 本身且不重复。`upto <= 1` 时直接返回空。
+    pub fn log_verbose_upto(target: &str, limit: usize, upto: i64) -> Result<Vec<LogEntry>> {
+        if upto <= 1 {
+            return Ok(Vec::new());
+        }
+        let limit = if limit == 0 { 500 } else { limit };
+        let range = format!("{}:1", upto - 1);
+        let xml = run_svn(&["log", "-v", "--xml", "-r", &range, "-l", &limit.to_string(), target])?;
+        Ok(parse_log(&xml))
+    }
+
+    /// 取 target(仓库内完整 URL) 在 rev 提交中的差异文本。
+    /// 使用 peg 限定 @rev，保证已删除的文件也能取到 diff。
+    pub fn diff(target_url: &str, rev: i64) -> Result<String> {
+        let peg = format!("{target_url}@{rev}");
+        run_svn(&["diff", "-c", &rev.to_string(), &peg])
+    }
+
+    // ---------------- XML 解析 ----------------
+
+    fn event_name(name: quick_xml::name::QName) -> String {
+        String::from_utf8_lossy(name.as_ref()).into_owned()
+    }
+
+    fn attr(buf: &quick_xml::events::BytesStart<'_>, key: &str) -> String {
+        buf.attributes()
+            .filter_map(|a| a.ok())
+            .find(|a| a.key.as_ref() == key.as_bytes())
+            .map(|a| String::from_utf8_lossy(a.value.as_ref()).into_owned())
+            .unwrap_or_default()
+    }
+
+    fn text_of(bytes: &quick_xml::events::BytesText<'_>) -> String {
+        bytes
+            .unescape()
+            .map(|c| c.into_owned())
+            .unwrap_or_else(|_| String::from_utf8_lossy(bytes.as_ref()).into_owned())
+    }
 
 /// 解析 `svn info --xml` 输出。
 pub fn parse_info(xml: &str) -> Result<RepoInfo> {
@@ -393,9 +401,66 @@ mod tests {
         let e = SvnError::Command("E200009 无法显示".into());
         assert!(e.to_string().contains("E200009"));
     }
+} // end mod tests
+
+} // end mod cli
+
+// ---------------- 后端分派 ----------------
+
+/// macOS 使用 libsvn 后端；其它平台使用 svn 命令行后端。
+pub fn connect(target: &str) -> Result<RepoInfo> {
+    #[cfg(target_os = "macos")]
+    {
+        libsvn::connect(target)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        cli::connect(target)
+    }
+}
+
+/// `svn log -v`：提交列表及其改动文件（供 Tab1）。
+pub fn log_verbose(target: &str, limit: usize) -> Result<Vec<LogEntry>> {
+    #[cfg(target_os = "macos")]
+    {
+        libsvn::log_verbose(target, limit)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        cli::log_verbose(target, limit)
+    }
+}
+
+/// 分页：取比 `upto`（最新已加载的“最深”march revision）更旧的至多 `limit` 条。
+/// `upto <= 1` 时直接返回空。
+pub fn log_verbose_upto(target: &str, limit: usize, upto: i64) -> Result<Vec<LogEntry>> {
+    #[cfg(target_os = "macos")]
+    {
+        libsvn::log_verbose_upto(target, limit, upto)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        cli::log_verbose_upto(target, limit, upto)
+    }
+}
+
+/// 取 target(仓库内完整 URL) 在 rev 提交中的差异文本。
+/// 使用 peg 限定 @rev，保证已删除的文件也能取到 diff。
+pub fn diff(target_url: &str, rev: i64) -> Result<String> {
+    #[cfg(target_os = "macos")]
+    {
+        libsvn::diff(target_url, rev)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        cli::diff(target_url, rev)
+    }
 }
 
 // ---------------- 集成测试（真实 svn, 用 /tmp 临时仓库） ----------------
+
+// 说明：集成测试通过上面的分派入口调用，因此在 macOS 上会走 libsvn 后端,
+// 在 Linux/Windows 上走 svn 命令行后端。
 
 #[cfg(test)]
 mod integration_tests {

@@ -20,6 +20,11 @@ rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "t
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 rfd = { version = "0.15", default-features = false }
 
+# macOS: 用 libsvn（subversion crate）替代 svn 命令行后端。
+# 构建前需先执行 `source scripts/macos-libsvn-env.sh` 生成 pkg-config 并设置环境。
+[target.'cfg(target_os = "macos")'.dependencies]
+subversion = "0.1.13"
+
 [build-dependencies]
 slint-build = "~1.16"
 
