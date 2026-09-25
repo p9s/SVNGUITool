@@ -4,6 +4,8 @@ SVN 提交查看工具。基于 **Rust + Slint** 构建的跨平台桌面 GUI，
 
 > 运行时依赖因平台而异：**macOS 使用 libsvn 动态库**访问 SVN；**Windows/Linux 通过 `svn` 命令行**执行 `log`/`diff`/`info` 等命令。
 
+English version: [README.en.md](./README.en.md)
+
 ## 功能
 
 - 连接 **SVN 仓库 URL** 或**本地工作副本路径**，自动识别仓库根与 HEAD 版本。
