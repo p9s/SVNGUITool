@@ -89,6 +89,8 @@ mod libsvn;
 #[cfg(not(target_os = "macos"))]
 mod cli {
     use super::*;
+    use quick_xml::events::Event;
+    use quick_xml::Reader;
     use std::process::Command;
 
     const SVN_BIN: &str = "svn";
