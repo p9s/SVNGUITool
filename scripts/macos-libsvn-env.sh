@@ -6,7 +6,7 @@
 # Homebrew 的 subversion 是 keg-only 且不附带 .pc 文件，而
 # subversion crate 的 subversion-sys 通过 pkg-config 探测 libsvn_*。
 #
-# 用法（在仓库根目录执行）：
+# 用法（在任意目录执行均可，脚本会定位到本仓库根目录）：
 #   source scripts/macos-libsvn-env.sh
 #
 # 依赖：brew install subversion apr apr-util utf8proc gettext lz4 zlib
@@ -14,11 +14,14 @@
 #
 set -e
 
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+
 SVN_PREFIX=$(brew --prefix subversion)
 APR_PREFIX=$(brew --prefix apr)
 APR_UTIL_PREFIX=$(brew --prefix apr-util)
 
-PC_DIR="$(pwd)/target/svn-pc"
+PC_DIR="$REPO_ROOT/target/svn-pc"
 mkdir -p "$PC_DIR"
 
 VERSION=$("$SVN_PREFIX/bin/svn" --version --quiet 2>/dev/null || true)
