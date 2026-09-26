@@ -40,6 +40,8 @@ On macOS the build depends on the `subversion` crate (`subversion-sys` probes `l
 
 After launching, enter a repository URL or a local working copy path in the top-left box and click "Connect"; alternatively click "Open Local Project…" to pick a folder.
 
+**Authentication**: the macOS backend shares credentials with the `svn` command line — it reads the on-disk cache under `~/.subversion/auth/` and the macOS Keychain (where the svn CLI stores passwords by default). The first time it accesses an existing Keychain item, macOS shows an authorization prompt ("SVNGUITool would like to use a password stored in your keychain"); after clicking Allow, connections work normally.
+
 ## Filtering
 
 All filter fields are combined with **AND**; leave a field empty to disable it:

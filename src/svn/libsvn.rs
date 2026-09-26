@@ -17,15 +17,28 @@ fn to_err(e: subversion::Error<'static>) -> SvnError {
     SvnError::Command(e.full_message())
 }
 
-/// 创建非交互式 Context：只挂载凭据缓存类 provider（等效 `--non-interactive`），
-/// 不启用任何交互提示。auth baton 挂载失败时不视为致命错误。
+/// 创建 Context：挂载与 svn 命令行等价的凭据 provider 集合，以便复用
+/// `~/.subversion/auth/` 的磁盘缓存与 macOS Keychain。
+///
+/// - `get_simple_provider`：读取 `auth/svn.simple` 中明文缓存的用户名/密码；
+/// - `get_platform_specific_client_providers`：macOS Keychain（svn CLI 默认
+///   把密码存于此）。新二进制首次读取既有条目时，macOS 会弹一次“允许访问
+///   Keychain？”授权框，之后无需再授权；
+/// - 不注册任何交互提示 provider（无凭据时直接失败，而不是卡在输入框）。
+///   auth baton 挂载失败时不视为致命错误。
 fn new_context() -> Result<Context> {
     let mut ctx = Context::new().map_err(to_err)?;
-    if let Ok(baton) = AuthBaton::open(vec![
+    let mut providers = vec![
         auth::get_ssl_server_trust_file_provider(),
         auth::get_ssl_client_cert_file_provider(),
+        auth::get_ssl_client_cert_pw_file_provider(None::<&fn(&str) -> std::result::Result<bool, subversion::Error<'static>>>),
         auth::get_username_provider(),
-    ]) {
+        auth::get_simple_provider(None::<&fn(&str) -> std::result::Result<bool, subversion::Error<'static>>>),
+    ];
+    if let Ok(mut platform) = auth::get_platform_specific_client_providers(None) {
+        providers.append(&mut platform);
+    }
+    if let Ok(baton) = AuthBaton::open(providers) {
         ctx.set_auth_owned(baton);
     }
     Ok(ctx)

@@ -39,6 +39,8 @@ macOS 构建依赖 `subversion` crate（`subversion-sys` 通过 pkg-config 探�
 
 启动后左上角输入仓库 URL 或本地工作副本路径，点击「连接」；也可点击「打开本地项目…」选择文件夹。
 
+**关于认证**：macOS 后端与 `svn` 命令行共享凭据——读取 `~/.subversion/auth/` 的磁盘缓存以及 macOS Keychain（svn CLI 默认把密码存于此）。首次访问既有 Keychain 条目时，macOS 会弹一次“SVNGUITool 想要使用钥匙串中存储的密码”授权框，允许后即可正常连接。
+
 ## 过滤说明
 
 过滤面板各字段均为**与**关系，留空即不限制：
